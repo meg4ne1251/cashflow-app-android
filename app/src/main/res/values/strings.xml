@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">家計簿</string>
+
+    <!-- Bottom navigation -->
+    <string name="nav_dashboard">ダッシュボード</string>
+    <string name="nav_transactions">取引</string>
+    <string name="nav_add">追加</string>
+    <string name="nav_analysis">分析</string>
+    <string name="nav_more">その他</string>
+
+    <!-- Phase 0 placeholders -->
+    <string name="placeholder_screen">%1$s 画面（実装予定）</string>
+</resources>
