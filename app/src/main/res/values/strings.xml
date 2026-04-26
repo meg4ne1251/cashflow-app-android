@@ -11,4 +11,29 @@
 
     <!-- Phase 0 placeholders -->
     <string name="placeholder_screen">%1$s 画面（実装予定）</string>
+
+    <!-- Auth: shared -->
+    <string name="auth_username">ユーザー名</string>
+    <string name="auth_password">パスワード</string>
+    <string name="auth_password_confirm">パスワード（確認）</string>
+
+    <!-- Auth: login -->
+    <string name="auth_login_title">ログイン</string>
+    <string name="auth_login_subtitle">ユーザー名とパスワードを入力してください</string>
+    <string name="auth_login_submit">ログイン</string>
+    <string name="auth_login_to_setup">初期セットアップを行う</string>
+
+    <!-- Auth: setup -->
+    <string name="auth_setup_title">初期セットアップ</string>
+    <string name="auth_setup_subtitle">最初のユーザーを作成します。サーバーごとに 1 度だけ行えます。</string>
+    <string name="auth_setup_submit">セットアップを完了する</string>
+
+    <!-- Auth: locked / biometric -->
+    <string name="auth_locked_title">ロック中</string>
+    <string name="auth_locked_message">本人確認のため生体認証で解除してください</string>
+    <string name="auth_locked_unlock">生体認証で解除</string>
+    <string name="auth_locked_sign_out">サインアウト</string>
+    <string name="auth_biometric_title">家計簿のロックを解除</string>
+    <string name="auth_biometric_subtitle">生体認証で続行します</string>
+    <string name="auth_biometric_cancel">キャンセル</string>
 </resources>

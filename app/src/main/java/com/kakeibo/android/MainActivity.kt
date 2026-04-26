@@ -1,19 +1,19 @@
 package com.kakeibo.android
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import com.kakeibo.android.ui.shell.AppShell
+import androidx.fragment.app.FragmentActivity
+import com.kakeibo.android.feature.root.RootApp
 import com.kakeibo.android.ui.theme.CashflowTheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
             CashflowTheme {
-                AppShell()
+                RootApp()
             }
         }
     }
