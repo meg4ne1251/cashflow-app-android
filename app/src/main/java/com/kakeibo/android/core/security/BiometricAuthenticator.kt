@@ -23,12 +23,13 @@ sealed interface BiometricResult {
 
 object BiometricAuthenticator {
 
+    private const val ALLOWED_AUTHENTICATORS =
+        BiometricManager.Authenticators.BIOMETRIC_WEAK or
+            BiometricManager.Authenticators.DEVICE_CREDENTIAL
+
     fun availability(context: Context): BiometricAvailability {
         val manager = BiometricManager.from(context)
-        val authenticators =
-            BiometricManager.Authenticators.BIOMETRIC_WEAK or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
-        return when (manager.canAuthenticate(authenticators)) {
+        return when (manager.canAuthenticate(ALLOWED_AUTHENTICATORS)) {
             BiometricManager.BIOMETRIC_SUCCESS -> BiometricAvailability.Available
             BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> BiometricAvailability.NotEnrolled
             BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
@@ -41,7 +42,6 @@ object BiometricAuthenticator {
         activity: FragmentActivity,
         title: String,
         subtitle: String? = null,
-        cancelLabel: String,
     ): BiometricResult = suspendCancellableCoroutine { cont ->
         val executor = ContextCompat.getMainExecutor(activity)
         val callback = object : BiometricPrompt.AuthenticationCallback() {
@@ -64,11 +64,13 @@ object BiometricAuthenticator {
             }
         }
         val prompt = BiometricPrompt(activity, executor, callback)
+        // DEVICE_CREDENTIAL is allowed so users without an enrolled biometric can still
+        // unlock with PIN/pattern/password. setNegativeButtonText is incompatible with
+        // device credential — the system shows its own credential fallback button.
         val info = BiometricPrompt.PromptInfo.Builder()
             .setTitle(title)
             .apply { subtitle?.let(::setSubtitle) }
-            .setNegativeButtonText(cancelLabel)
-            .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_WEAK)
+            .setAllowedAuthenticators(ALLOWED_AUTHENTICATORS)
             .setConfirmationRequired(false)
             .build()
         prompt.authenticate(info)

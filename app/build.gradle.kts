@@ -42,11 +42,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField(
-                "String",
-                "API_BASE_URL",
-                "\"" + (project.findProperty("API_BASE_URL") as String? ?: "https://example.com") + "\""
-            )
+            // No fallback URL on purpose: shipping a release build pointing at the wrong
+            // host is a worse outcome than a build failure. The taskGraph hook below
+            // turns the missing property into a hard error only when a release task is
+            // actually scheduled, so debug builds can still configure cleanly.
+            val releaseApiBaseUrl =
+                project.findProperty("API_BASE_URL") as String? ?: "MISSING_API_BASE_URL"
+            buildConfigField("String", "API_BASE_URL", "\"$releaseApiBaseUrl\"")
         }
     }
 
@@ -138,3 +140,17 @@ dependencies {
     androidTestImplementation(libs.compose.ui.test.junit4)
     androidTestImplementation(libs.mockk.android)
 }
+
+// Fail any release task if API_BASE_URL was not provided.
+gradle.taskGraph.whenReady {
+    val touchesRelease = allTasks.any { task ->
+        task.project == project && task.name.contains("Release")
+    }
+    if (touchesRelease && project.findProperty("API_BASE_URL") == null) {
+        throw GradleException(
+            "API_BASE_URL must be set for release builds " +
+                "(e.g. ./gradlew :app:assembleRelease -PAPI_BASE_URL=https://api.example.com)"
+        )
+    }
+}
+

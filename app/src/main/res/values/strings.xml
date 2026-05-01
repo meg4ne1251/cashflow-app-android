@@ -34,6 +34,5 @@
     <string name="auth_locked_unlock">生体認証で解除</string>
     <string name="auth_locked_sign_out">サインアウト</string>
     <string name="auth_biometric_title">家計簿のロックを解除</string>
-    <string name="auth_biometric_subtitle">生体認証で続行します</string>
-    <string name="auth_biometric_cancel">キャンセル</string>
+    <string name="auth_biometric_subtitle">生体認証またはデバイス資格情報で続行します</string>
 </resources>

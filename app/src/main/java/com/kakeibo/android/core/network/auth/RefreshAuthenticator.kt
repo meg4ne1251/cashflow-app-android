@@ -32,12 +32,7 @@ class RefreshAuthenticator @Inject constructor(
 
     override fun authenticate(route: Route?, response: Response): Request? {
         val request = response.request
-        val path = request.url.encodedPath
-        if (path.contains("/auth/login") ||
-            path.contains("/auth/refresh") ||
-            path.contains("/auth/setup") ||
-            path.contains("/auth/logout")
-        ) {
+        if (request.url.encodedPath in AUTH_PATHS_TO_SKIP) {
             return null
         }
 
@@ -52,8 +47,20 @@ class RefreshAuthenticator @Inject constructor(
             return null
         }
 
+        // Snapshot the current access_token before queuing for the lock. If another
+        // thread already refreshed by the time we acquire it, the snapshot will differ
+        // from the current cookie and we can skip a redundant /auth/refresh call.
+        val host = request.url.host
+        val snapshotToken = cookieJar.accessTokenSnapshot(host)
+
         val refreshed = runBlocking {
-            mutex.withLock { performRefresh(request) }
+            mutex.withLock {
+                if (cookieJar.accessTokenSnapshot(host) != snapshotToken) {
+                    true
+                } else {
+                    performRefresh(request)
+                }
+            }
         }
 
         return if (refreshed) {
@@ -93,5 +100,13 @@ class RefreshAuthenticator @Inject constructor(
 
     companion object {
         private val EMPTY_JSON_BODY = "{}".toRequestBody("application/json".toMediaType())
+
+        // Exact-match list to avoid false positives like "/foo/auth/login-history".
+        private val AUTH_PATHS_TO_SKIP = setOf(
+            "/api/v1/auth/login",
+            "/api/v1/auth/refresh",
+            "/api/v1/auth/setup",
+            "/api/v1/auth/logout",
+        )
     }
 }

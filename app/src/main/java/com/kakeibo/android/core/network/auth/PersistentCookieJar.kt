@@ -11,7 +11,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
-import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -26,17 +25,24 @@ class PersistentCookieJar @Inject constructor(
 ) : CookieJar {
 
     private val prefs: SharedPreferences = createEncryptedPrefs(context)
-    private val cache = ConcurrentHashMap<String, MutableList<Cookie>>()
+
+    /**
+     * All cookie state — cache and disk writes — is guarded by [lock]. A single monitor
+     * keeps [clear] from racing with concurrent [saveFromResponse] writes (which would
+     * otherwise persist a fresh cookie back to disk after logout).
+     */
+    private val lock = Any()
+    private val cache: MutableMap<String, MutableList<Cookie>> = HashMap()
 
     init {
-        loadAllFromDisk()
+        synchronized(lock) { loadAllFromDisk() }
     }
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
         if (cookies.isEmpty()) return
-        val host = url.host
-        val bucket = cache.getOrPut(host) { mutableListOf() }
-        synchronized(bucket) {
+        synchronized(lock) {
+            val host = url.host
+            val bucket = cache.getOrPut(host) { mutableListOf() }
             cookies.forEach { incoming ->
                 bucket.removeAll { it.name == incoming.name && it.path == incoming.path }
                 if (incoming.expiresAt > System.currentTimeMillis()) {
@@ -48,8 +54,8 @@ class PersistentCookieJar @Inject constructor(
     }
 
     override fun loadForRequest(url: HttpUrl): List<Cookie> {
-        val bucket = cache[url.host] ?: return emptyList()
-        synchronized(bucket) {
+        synchronized(lock) {
+            val bucket = cache[url.host] ?: return emptyList()
             val now = System.currentTimeMillis()
             val expired = bucket.filter { it.expiresAt < now }
             if (expired.isNotEmpty()) {
@@ -64,17 +70,28 @@ class PersistentCookieJar @Inject constructor(
      * Drop all saved cookies. Called on logout or when refresh fails.
      */
     fun clear() {
-        cache.clear()
-        prefs.edit().clear().apply()
+        synchronized(lock) {
+            cache.clear()
+            prefs.edit().clear().apply()
+        }
     }
 
     fun hasRefreshToken(): Boolean {
-        val now = System.currentTimeMillis()
-        return cache.values.any { bucket ->
-            synchronized(bucket) {
+        synchronized(lock) {
+            val now = System.currentTimeMillis()
+            return cache.values.any { bucket ->
                 bucket.any { it.name == REFRESH_TOKEN && it.expiresAt > now }
             }
         }
+    }
+
+    /**
+     * Token snapshot used to coalesce concurrent refresh attempts. If the access_token
+     * cookie has changed since the snapshot was taken, another caller already refreshed
+     * the session and we can skip our own /auth/refresh call.
+     */
+    fun accessTokenSnapshot(host: String): String? = synchronized(lock) {
+        cache[host]?.firstOrNull { it.name == ACCESS_TOKEN }?.value
     }
 
     private fun loadAllFromDisk() {
@@ -146,6 +163,7 @@ class PersistentCookieJar @Inject constructor(
     companion object {
         private const val PREFS_NAME = "cashflow_cookies"
         private const val REFRESH_TOKEN = "refresh_token"
+        private const val ACCESS_TOKEN = "access_token"
 
         private fun createEncryptedPrefs(context: Context): SharedPreferences {
             val masterKey = MasterKey.Builder(context)

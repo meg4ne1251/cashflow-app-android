@@ -7,7 +7,10 @@ import com.kakeibo.android.core.data.auth.AuthResult
 import com.kakeibo.android.core.data.auth.SessionManager
 import com.kakeibo.android.core.data.auth.SessionState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -16,6 +19,10 @@ import javax.inject.Inject
  *  - On first launch, decides whether we land on Login, Setup, Locked, or main.
  *  - After biometric unlock, validates the session against /me (which transparently
  *    refreshes via the OkHttp Authenticator) and flips state accordingly.
+ *
+ * Auto-prompts the biometric sheet exactly once per Locked transition via
+ * [unlockPromptEvents]. Subsequent attempts (user cancel, network error) require an
+ * explicit tap on the LockedScreen unlock button to avoid an infinite re-prompt loop.
  */
 @HiltViewModel
 class RootViewModel @Inject constructor(
@@ -24,6 +31,9 @@ class RootViewModel @Inject constructor(
 ) : ViewModel() {
 
     val sessionState: StateFlow<SessionState> = sessionManager.state
+
+    private val _unlockPromptEvents = Channel<Unit>(capacity = Channel.CONFLATED)
+    val unlockPromptEvents: Flow<Unit> = _unlockPromptEvents.receiveAsFlow()
 
     init {
         bootstrap()
@@ -34,6 +44,7 @@ class RootViewModel @Inject constructor(
             sessionManager.setLoading()
             if (sessionManager.hasRefreshToken()) {
                 sessionManager.setLocked()
+                _unlockPromptEvents.trySend(Unit)
                 return@launch
             }
             decideUnauthenticatedState()
@@ -48,9 +59,12 @@ class RootViewModel @Inject constructor(
                     sessionManager.setLoggedOut()
                     decideUnauthenticatedState()
                 } else {
+                    // Server-side error after a successful biometric. Stay locked but
+                    // do not auto-reprompt — user must tap unlock again.
                     sessionManager.setLocked()
                 }
                 is AuthResult.NetworkError, is AuthResult.Unknown -> {
+                    // Offline / unknown failure. Same policy as 5xx.
                     sessionManager.setLocked()
                 }
             }

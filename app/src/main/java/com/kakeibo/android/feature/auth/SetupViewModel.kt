@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kakeibo.android.core.data.auth.AuthRepository
 import com.kakeibo.android.core.data.auth.AuthResult
+import com.kakeibo.android.core.data.auth.SessionManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,7 @@ data class SetupUiState(
 @HiltViewModel
 class SetupViewModel @Inject constructor(
     private val authRepository: AuthRepository,
+    private val sessionManager: SessionManager,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SetupUiState())
@@ -72,13 +74,13 @@ class SetupViewModel @Inject constructor(
             when (val setup = authRepository.setup(current.username, current.password)) {
                 is AuthResult.Success -> {
                     // Backend doesn't auto-login on setup; immediately log in to mint cookies.
-                    when (val login = authRepository.login(current.username, current.password)) {
+                    when (authRepository.login(current.username, current.password)) {
                         is AuthResult.Success -> Unit
-                        else -> _uiState.update {
-                            it.copy(
-                                isSubmitting = false,
-                                formError = "セットアップは完了しましたがログインに失敗しました。再度ログインしてください",
-                            )
+                        else -> {
+                            // Setup succeeded but auto-login didn't. The backend now has a
+                            // user, so flip the root state to LoggedOut — the navigator
+                            // will swap us to LoginScreen and the user can retry there.
+                            sessionManager.setLoggedOut()
                         }
                     }
                 }

@@ -37,7 +37,6 @@ fun RootApp(viewModel: RootViewModel = hiltViewModel()) {
 
     val unlockTitle = stringResource(R.string.auth_biometric_title)
     val unlockSubtitle = stringResource(R.string.auth_biometric_subtitle)
-    val unlockCancel = stringResource(R.string.auth_biometric_cancel)
 
     val triggerUnlock: () -> Unit = remember(activity) {
         {
@@ -50,7 +49,6 @@ fun RootApp(viewModel: RootViewModel = hiltViewModel()) {
                         activity = act,
                         title = unlockTitle,
                         subtitle = unlockSubtitle,
-                        cancelLabel = unlockCancel,
                     )
                     when (result) {
                         BiometricResult.Success -> viewModel.onBiometricUnlocked()
@@ -62,12 +60,14 @@ fun RootApp(viewModel: RootViewModel = hiltViewModel()) {
         }
     }
 
-    LaunchedEffect(state) {
-        if (state is SessionState.Locked) {
+    // Auto-trigger only on the events emitted by the ViewModel (i.e. once per fresh
+    // Locked transition). Recompositions of the Locked state itself do not re-prompt.
+    LaunchedEffect(viewModel) {
+        viewModel.unlockPromptEvents.collect {
             val canUseBiometric =
                 BiometricAuthenticator.availability(context) == BiometricAvailability.Available
             if (!canUseBiometric) {
-                // No biometric hardware/enrolment → resume directly via /me.
+                // No biometric hardware/enrolment and no device credential → resume via /me.
                 viewModel.onBiometricUnlocked()
             } else {
                 triggerUnlock()
