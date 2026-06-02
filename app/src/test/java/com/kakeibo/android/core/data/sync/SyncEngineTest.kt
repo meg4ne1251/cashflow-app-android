@@ -173,6 +173,30 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `pagination that cannot advance reports an error and leaves the watermark untouched`() = runTest {
+        // has_more stays true but every returned row sits exactly at the current cursor (EPOCH),
+        // so nextCursor() == cursor and the loop cannot make progress. This must surface as an
+        // error rather than a false Success that hides the incomplete pull.
+        val api = FakeSyncApi(
+            ArrayDeque(
+                listOf(
+                    SyncPullResponse(
+                        data = SyncData(accounts = listOf(account("a1", SyncEngine.EPOCH))),
+                        sync_timestamp = "2026-05-10T00:00:00Z",
+                        has_more = true,
+                    ),
+                ),
+            ),
+        )
+
+        val outcome = engine(api).pull()
+
+        assertTrue(outcome is SyncOutcome.Error)
+        assertEquals(1, db.accountDao().count()) // the page that was fetched is still persisted
+        assertNull(watermark.get())
+    }
+
+    @Test
     fun `network failure surfaces an error and leaves the watermark untouched`() = runTest {
         val api = object : SyncApiService {
             override suspend fun pull(since: String): SyncPullResponse = throw IOException("offline")

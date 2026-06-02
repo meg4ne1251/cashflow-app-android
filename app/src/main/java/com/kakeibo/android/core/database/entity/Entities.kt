@@ -169,7 +169,12 @@ data class BudgetEntity(
     @Embedded val sync: SyncMeta = SyncMeta(),
 )
 
-/** Notification settings have no logical-delete column on the backend (see DTO). */
+/**
+ * The sync API does not expose `deleted_at` for notification settings (it is absent from the
+ * DTO, even though the backend table has the column), so this replica carries no soft-delete
+ * field and observeAll returns every row. Notification settings are fixed per-type rows created
+ * at setup and are not deleted in practice.
+ */
 @Entity(tableName = "notification_settings")
 data class NotificationSettingEntity(
     @PrimaryKey val id: String,

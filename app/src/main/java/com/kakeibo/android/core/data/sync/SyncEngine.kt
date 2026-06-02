@@ -58,6 +58,7 @@ class SyncEngine @Inject constructor(
             var cursor = watermark.get() ?: EPOCH
             var pulled = 0
             var page = 0
+            var complete = false
             while (true) {
                 val response = api.pull(cursor)
                 val data = response.data
@@ -66,6 +67,7 @@ class SyncEngine @Inject constructor(
 
                 if (!response.has_more) {
                     watermark.set(response.sync_timestamp)
+                    complete = true
                     break
                 }
                 // Advance to the OLDEST of each entity type's newest row, not the global max.
@@ -77,10 +79,18 @@ class SyncEngine @Inject constructor(
                 // but the upsert is idempotent so that is harmless.
                 val next = data.nextCursor()
                 if (next == null || next == cursor || ++page > MAX_PAGES) {
-                    Timber.w("Sync pagination stalled (page=%d, cursor=%s); stopping", page, cursor)
+                    Timber.w("Sync pagination stalled (page=%d, cursor=%s) after %d rows", page, cursor, pulled)
                     break
                 }
                 cursor = next
+            }
+            if (!complete) {
+                // The server still reported has_more but the cursor could not advance (a
+                // page-cap tie with no secondary sort key, or the MAX_PAGES guard). The
+                // watermark is deliberately left untouched so the next run retries from the
+                // same point; report an error rather than a false Success so the incomplete
+                // pull is visible instead of silently re-fetching forever.
+                return SyncOutcome.Error("sync incomplete: pagination stalled after $pulled rows")
             }
             Timber.i("Sync pull complete: %d rows", pulled)
             SyncOutcome.Success(pulled)
