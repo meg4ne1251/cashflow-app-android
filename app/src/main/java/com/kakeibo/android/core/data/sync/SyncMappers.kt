@@ -20,8 +20,11 @@ import com.kakeibo.android.core.network.dto.NotificationSettingDto
 import com.kakeibo.android.core.network.dto.RecurringTransactionDto
 import com.kakeibo.android.core.network.dto.TagDto
 import com.kakeibo.android.core.network.dto.TemplateDto
+import com.kakeibo.android.core.network.dto.SyncChange
 import com.kakeibo.android.core.network.dto.TransactionDto
 import com.kakeibo.android.core.network.dto.TransferDto
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import java.time.Instant
 import java.time.OffsetDateTime
 
@@ -107,3 +110,43 @@ fun InputPatternDto.toEntity(now: Long) = InputPatternEntity(
     id = id, keyword = keyword, categoryId = category_id, accountId = account_id,
     hitCount = hit_count, lastUsedAt = last_used_at, sync = syncedMeta(last_used_at, now),
 )
+
+// ===== Room entity → push change (Phase 3 write path) =====
+
+/**
+ * Builds the [SyncChange] the backend `POST /sync/push` expects for a locally-changed transaction.
+ * Operation is inferred from the local sync bookkeeping: a soft-deleted row deletes, a row that was
+ * never synced (`version == 0`) creates, anything else updates. `client_version` carries the base
+ * version the optimistic-lock check runs against (0 for a create → server assigns version 1).
+ * The backend requires `category_id`/`date`; `date` is already an ISO-local string the server can
+ * `LocalDateTime.parse`. Tags are intentionally absent (not part of the Phase 3 sync contract).
+ */
+fun TransactionEntity.toSyncChange(): SyncChange {
+    val operation = when {
+        deletedAt != null -> "delete"
+        version == 0 -> "create"
+        else -> "update"
+    }
+    val data = if (operation == "delete") {
+        buildJsonObject { put("id", id) }
+    } else {
+        buildJsonObject {
+            put("id", id)
+            name?.let { put("name", it) }
+            put("type", type)
+            put("amount", amount)
+            put("currency", currency)
+            put("date", date)
+            memo?.let { put("memo", it) }
+            categoryId?.let { put("category_id", it) }
+            accountId?.let { put("account_id", it) }
+            put("is_balance_adjustment", isBalanceAdjustment)
+        }
+    }
+    return SyncChange(
+        entity_type = "transaction",
+        operation = operation,
+        data = data,
+        client_version = version,
+    )
+}

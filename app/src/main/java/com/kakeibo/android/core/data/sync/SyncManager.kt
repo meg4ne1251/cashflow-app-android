@@ -44,7 +44,7 @@ class SyncManager @Inject constructor(
         if (!mutex.tryLock()) return // a sync is already running; coalesce.
         try {
             _state.value = SyncState.Syncing
-            _state.value = when (val outcome = syncEngine.pull()) {
+            _state.value = when (val outcome = syncEngine.sync()) {
                 is SyncOutcome.Success -> SyncState.Success(outcome.pulled)
                 is SyncOutcome.Error -> SyncState.Error(outcome.message)
             }

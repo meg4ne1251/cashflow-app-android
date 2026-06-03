@@ -12,8 +12,12 @@ import com.kakeibo.android.core.database.dao.TagDao
 import com.kakeibo.android.core.database.dao.TemplateDao
 import com.kakeibo.android.core.database.dao.TransactionDao
 import com.kakeibo.android.core.database.dao.TransferDao
+import com.kakeibo.android.core.database.entity.SyncStatus
 import com.kakeibo.android.core.network.api.SyncApiService
 import com.kakeibo.android.core.network.dto.SyncData
+import com.kakeibo.android.core.network.dto.SyncPushRequest
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import retrofit2.HttpException
 import timber.log.Timber
 import java.io.IOException
@@ -47,6 +51,77 @@ class SyncEngine @Inject constructor(
     private val notificationSettingDao: NotificationSettingDao,
     private val inputPatternDao: InputPatternDao,
 ) {
+
+    /** Serializes full sync runs so the in-app [SyncManager] and the [SyncWorker] never overlap. */
+    private val syncMutex = Mutex()
+
+    /**
+     * Full offline-first sync: push local changes first, then pull. Push runs first so a row we
+     * just uploaded comes back in the same pull and reconciles to the server's authoritative
+     * version/timestamp. A push transport failure aborts before the (doomed) pull.
+     */
+    suspend fun sync(): SyncOutcome = syncMutex.withLock {
+        when (val pushResult = push()) {
+            is SyncOutcome.Error -> pushResult
+            is SyncOutcome.Success -> pull()
+        }
+    }
+
+    /**
+     * Uploads every locally-changed transaction (created/edited/soft-deleted offline) in batches.
+     * On `accepted` the row adopts the server version and is marked clean; on `conflict` it is
+     * flagged so the following pull overwrites it with the server's newer copy (last-write-wins,
+     * server side, per req 2.6.2); on `error` it stays pending for the next attempt.
+     */
+    suspend fun push(): SyncOutcome {
+        return try {
+            val dirty = transactionDao.dirty()
+            if (dirty.isEmpty()) return SyncOutcome.Success(0)
+            var pushed = 0
+            dirty.chunked(MAX_BATCH).forEach { batch ->
+                val byId = batch.associateBy { it.id }
+                val response = api.push(SyncPushRequest(changes = batch.map { it.toSyncChange() }))
+                db.withTransaction {
+                    response.results.forEach { result ->
+                        val entity = byId[result.id] ?: return@forEach
+                        when (result.status) {
+                            "accepted" -> {
+                                val newVersion = result.server_version ?: (entity.version + 1)
+                                transactionDao.upsert(
+                                    entity.copy(
+                                        version = newVersion,
+                                        sync = entity.sync.copy(
+                                            isSynced = true,
+                                            syncStatus = SyncStatus.CLEAN,
+                                        ),
+                                    )
+                                )
+                                pushed++
+                            }
+                            "conflict" -> transactionDao.upsert(
+                                entity.copy(sync = entity.sync.copy(syncStatus = SyncStatus.CONFLICT))
+                            )
+                            else -> Timber.w(
+                                "Sync push rejected: %s %s status=%s",
+                                result.entity_type, result.id, result.status,
+                            )
+                        }
+                    }
+                }
+            }
+            Timber.i("Sync push complete: %d accepted", pushed)
+            SyncOutcome.Success(pushed)
+        } catch (e: HttpException) {
+            Timber.w(e, "Sync push HTTP error")
+            SyncOutcome.Error("HTTP ${e.code()}")
+        } catch (e: IOException) {
+            Timber.w(e, "Sync push network error")
+            SyncOutcome.Error(e.message ?: "network")
+        } catch (e: Exception) {
+            Timber.e(e, "Sync push failed")
+            SyncOutcome.Error(e.message ?: e::class.simpleName.orEmpty())
+        }
+    }
 
     /**
      * Pulls all changes since the last watermark, paging until the server reports no more.
@@ -157,5 +232,8 @@ class SyncEngine @Inject constructor(
 
         /** Safety cap on pagination iterations to avoid an unbounded loop. */
         private const val MAX_PAGES = 200
+
+        /** Server-side per-request change limit (SyncService.MAX_BATCH_SIZE). */
+        private const val MAX_BATCH = 100
     }
 }

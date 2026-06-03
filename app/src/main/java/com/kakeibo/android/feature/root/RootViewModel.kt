@@ -7,6 +7,7 @@ import com.kakeibo.android.core.data.auth.AuthResult
 import com.kakeibo.android.core.data.auth.SessionManager
 import com.kakeibo.android.core.data.auth.SessionState
 import com.kakeibo.android.core.data.sync.SyncManager
+import com.kakeibo.android.core.data.sync.SyncScheduler
 import com.kakeibo.android.core.data.sync.SyncState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
@@ -31,6 +32,7 @@ class RootViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val authRepository: AuthRepository,
     private val syncManager: SyncManager,
+    private val syncScheduler: SyncScheduler,
 ) : ViewModel() {
 
     val sessionState: StateFlow<SessionState> = sessionManager.state
@@ -52,7 +54,10 @@ class RootViewModel @Inject constructor(
     private fun triggerSyncOnAuthentication() {
         viewModelScope.launch {
             sessionManager.state.collect { state ->
-                if (state is SessionState.Authenticated) syncManager.syncNow()
+                if (state is SessionState.Authenticated) {
+                    syncManager.syncNow()
+                    syncScheduler.ensurePeriodicSync()
+                }
             }
         }
     }
