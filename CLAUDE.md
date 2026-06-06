@@ -4,10 +4,23 @@ Kotlin + Jetpack Compose の家計簿アプリ。バックエンドは `/home/me
 
 ## 開発フロー
 
-- **コード編集**: このVM上で行う
-- **動作確認・UI検証**: ローカルのMacで Android CLI を使って行う
+- **コード編集・ビルド確認（`./gradlew test` 等）**: このVM上で行う
+- **動作確認・UI検証**: ローカルのMacで行う
 
-VM環境はGUIがないためエミュレータが起動できない。APKをビルドしてMacに持ち込むか、Macでビルドして確認する。
+VM環境はGUIがないためエミュレータが起動できない。
+Mac側でも同じリポジトリをクローンし、`git pull` → ビルド → Android CLI で確認する。
+
+```
+# VM側（コード編集後）
+git push
+
+# Mac側（動作確認）
+git pull
+./gradlew assembleDebug
+android emulator start medium_phone
+android run --apks=app/build/outputs/apk/debug/app-debug.apk
+android screen capture --output=screen.png --annotate
+```
 
 ## Android CLI（Mac側で実行）
 
