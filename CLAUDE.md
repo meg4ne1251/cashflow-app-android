@@ -2,9 +2,16 @@
 
 Kotlin + Jetpack Compose の家計簿アプリ。バックエンドは `/home/megane/dev/cashflow-app`。
 
-## Android CLI
+## 開発フロー
 
-Android CLI（`android` コマンド）がインストール済み。エミュレータ操作・APKデプロイ・スクリーンショット取得をコマンドラインから行える。
+- **コード編集**: このVM上で行う
+- **動作確認・UI検証**: ローカルのMacで Android CLI を使って行う
+
+VM環境はGUIがないためエミュレータが起動できない。APKをビルドしてMacに持ち込むか、Macでビルドして確認する。
+
+## Android CLI（Mac側で実行）
+
+Android CLI（`android` コマンド）でエミュレータ操作・APKデプロイ・スクリーンショット取得ができる。
 
 ### よく使うコマンド
 
@@ -25,7 +32,7 @@ android studio render-compose-preview <file> <composable>
 android studio version-lookup <artifact>
 ```
 
-### UIを確認するときの手順
+### UIを確認するときの手順（Mac側）
 
 1. `android emulator start medium_phone`
 2. `./gradlew assembleDebug`
