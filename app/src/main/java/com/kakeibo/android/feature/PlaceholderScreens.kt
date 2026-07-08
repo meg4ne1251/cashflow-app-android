@@ -26,17 +26,8 @@ fun PlaceholderScreen(title: String, modifier: Modifier = Modifier) {
     }
 }
 
-@Composable
-fun DashboardScreen(modifier: Modifier = Modifier) =
-    PlaceholderScreen(stringResource(R.string.nav_dashboard), modifier.padding(16.dp))
-
-@Composable
-fun TransactionListScreen(modifier: Modifier = Modifier) =
-    PlaceholderScreen(stringResource(R.string.nav_transactions), modifier.padding(16.dp))
-
-@Composable
-fun TransactionFormScreen(modifier: Modifier = Modifier) =
-    PlaceholderScreen(stringResource(R.string.nav_add), modifier.padding(16.dp))
+// Dashboard, transaction list, and transaction form are implemented in their feature packages
+// (feature/dashboard, feature/transactions). Analysis and More remain placeholders until later phases.
 
 @Composable
 fun AnalysisScreen(modifier: Modifier = Modifier) =

@@ -35,4 +35,76 @@
     <string name="auth_locked_sign_out">サインアウト</string>
     <string name="auth_biometric_title">家計簿のロックを解除</string>
     <string name="auth_biometric_subtitle">生体認証またはデバイス資格情報で続行します</string>
+
+    <!-- Common actions -->
+    <string name="action_cancel">キャンセル</string>
+    <string name="action_close">閉じる</string>
+    <string name="action_edit">編集</string>
+    <string name="action_delete">削除</string>
+    <string name="action_undo">元に戻す</string>
+
+    <!-- Sync status badges -->
+    <string name="sync_pending">未同期</string>
+    <string name="sync_conflict">競合</string>
+
+    <!-- Transaction form -->
+    <string name="tx_form_title_new">取引を追加</string>
+    <string name="tx_form_title_edit">取引の編集</string>
+    <string name="tx_type_expense">支出</string>
+    <string name="tx_type_income">収入</string>
+    <string name="tx_field_category">カテゴリ</string>
+    <string name="tx_field_account">決済</string>
+    <string name="tx_field_date">日時</string>
+    <string name="tx_field_name">名前</string>
+    <string name="tx_field_memo">メモ</string>
+    <string name="tx_field_name_hint">任意 (例: スーパーで買い物)</string>
+    <string name="tx_field_memo_hint">任意 (例: 同僚と)</string>
+    <string name="tx_date_today">今日</string>
+    <string name="tx_date_yesterday">昨日</string>
+    <string name="tx_no_categories">利用可能なカテゴリがありません</string>
+    <string name="tx_no_accounts">決済手段がありません</string>
+    <string name="tx_save_new">登録</string>
+    <string name="tx_save_edit">更新</string>
+    <string name="tx_error_amount">金額を入力してください</string>
+    <string name="tx_error_category">カテゴリを選択してください</string>
+    <string name="tx_amount_label">金額</string>
+    <string name="calc_equals">=</string>
+    <string name="calc_backspace">⌫</string>
+
+    <!-- Transaction list -->
+    <string name="tx_list_title">取引一覧</string>
+    <string name="tx_search_hint">名前・メモで検索…</string>
+    <string name="tx_filter_all">すべて</string>
+    <string name="tx_filter_advanced">詳細フィルタ</string>
+    <string name="tx_filter_category">カテゴリ</string>
+    <string name="tx_filter_account">決済手段</string>
+    <string name="tx_sort_label">並び替え</string>
+    <string name="tx_sort_date_desc">日付（新しい順）</string>
+    <string name="tx_sort_date_asc">日付（古い順）</string>
+    <string name="tx_sort_amount_desc">金額（高い順）</string>
+    <string name="tx_sort_amount_asc">金額（低い順）</string>
+    <string name="tx_empty">取引がありません</string>
+    <string name="tx_new">新規取引</string>
+    <string name="tx_deleted_snackbar">取引を削除しました</string>
+    <string name="tx_count_format">%1$d件</string>
+
+    <!-- Dashboard -->
+    <string name="dash_hero_label">今月の支出ペース</string>
+    <string name="dash_budget_unset">予算未設定</string>
+    <string name="dash_budget_pace_ok">ペースより余裕あり</string>
+    <string name="dash_budget_pace_over">ペース超過</string>
+    <string name="dash_income">今月の収入</string>
+    <string name="dash_expense">今月の支出</string>
+    <string name="dash_balance">収支バランス</string>
+    <string name="dash_balance_sub">月初からの累計</string>
+    <string name="dash_mom">前月比</string>
+    <string name="dash_budget_title">予算消化率</string>
+    <string name="dash_budget_empty">予算が設定されていません</string>
+    <string name="dash_accounts_title">残高 — 決済手段別</string>
+    <string name="dash_accounts_empty">決済手段がありません</string>
+    <string name="dash_recent_title">直近の取引</string>
+    <string name="dash_recent_empty">取引がありません</string>
+    <string name="dash_quick_title">クイック登録 — タップで即記録</string>
+    <string name="dash_quick_other">その他を入力</string>
+    <string name="dash_see_all">すべて見る</string>
 </resources>

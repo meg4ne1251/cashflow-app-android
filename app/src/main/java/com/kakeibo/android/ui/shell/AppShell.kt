@@ -19,14 +19,16 @@ import com.kakeibo.android.ui.navigation.TopLevelDestination
 fun AppShell() {
     val navController = rememberNavController()
     val backStackEntry by navController.currentBackStackEntryAsState()
-    val currentRoute = backStackEntry?.destination?.route
+    // Strip optional query args (e.g. the Add form's "transactions/new?templateId=...") so the
+    // current route can be matched against a tab's plain route.
+    val currentRoute = backStackEntry?.destination?.route?.substringBefore('?')
 
     Scaffold(
         bottomBar = {
             NavigationBar {
                 TopLevelDestination.entries.forEach { destination ->
                     val selected = backStackEntry?.destination?.hierarchy?.any {
-                        it.route == destination.route
+                        it.route?.substringBefore('?') == destination.route
                     } == true
 
                     NavigationBarItem(

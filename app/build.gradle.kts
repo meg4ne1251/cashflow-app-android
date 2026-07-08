@@ -68,6 +68,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {
@@ -100,7 +105,12 @@ dependencies {
     // Room
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
+    implementation(libs.room.paging)
     ksp(libs.room.compiler)
+
+    // Paging
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
 
     // DataStore / Security
     implementation(libs.androidx.datastore.preferences)

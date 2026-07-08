@@ -4,6 +4,7 @@ import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFact
 import com.kakeibo.android.BuildConfig
 import com.kakeibo.android.core.network.api.AuthApiService
 import com.kakeibo.android.core.network.api.HealthApi
+import com.kakeibo.android.core.network.api.SyncApiService
 import com.kakeibo.android.core.network.auth.PersistentCookieJar
 import com.kakeibo.android.core.network.auth.RefreshAuthenticator
 import dagger.Module
@@ -90,4 +91,9 @@ object NetworkModule {
     @Singleton
     fun provideAuthApi(retrofit: Retrofit): AuthApiService =
         retrofit.create(AuthApiService::class.java)
+
+    @Provides
+    @Singleton
+    fun provideSyncApi(retrofit: Retrofit): SyncApiService =
+        retrofit.create(SyncApiService::class.java)
 }

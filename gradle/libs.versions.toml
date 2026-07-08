@@ -20,6 +20,7 @@ hiltWork = "1.2.0"
 
 # Persistence
 room = "2.6.1"
+paging = "3.3.5"
 datastore = "1.1.1"
 securityCrypto = "1.1.0-alpha06"
 
@@ -82,7 +83,12 @@ hilt-work-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hi
 # Room
 room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
 room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+room-paging = { module = "androidx.room:room-paging", version.ref = "room" }
 room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+# Paging
+androidx-paging-runtime = { module = "androidx.paging:paging-runtime", version.ref = "paging" }
+androidx-paging-compose = { module = "androidx.paging:paging-compose", version.ref = "paging" }
 
 # DataStore / Security
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }

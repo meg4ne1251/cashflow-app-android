@@ -6,6 +6,9 @@ import com.kakeibo.android.core.data.auth.AuthRepository
 import com.kakeibo.android.core.data.auth.AuthResult
 import com.kakeibo.android.core.data.auth.SessionManager
 import com.kakeibo.android.core.data.auth.SessionState
+import com.kakeibo.android.core.data.sync.SyncManager
+import com.kakeibo.android.core.data.sync.SyncScheduler
+import com.kakeibo.android.core.data.sync.SyncState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
@@ -28,15 +31,35 @@ import javax.inject.Inject
 class RootViewModel @Inject constructor(
     private val sessionManager: SessionManager,
     private val authRepository: AuthRepository,
+    private val syncManager: SyncManager,
+    private val syncScheduler: SyncScheduler,
 ) : ViewModel() {
 
     val sessionState: StateFlow<SessionState> = sessionManager.state
+    val syncState: StateFlow<SyncState> = syncManager.state
 
     private val _unlockPromptEvents = Channel<Unit>(capacity = Channel.CONFLATED)
     val unlockPromptEvents: Flow<Unit> = _unlockPromptEvents.receiveAsFlow()
 
     init {
         bootstrap()
+        triggerSyncOnAuthentication()
+    }
+
+    /**
+     * Kicks off an initial full sync whenever the session becomes authenticated (fresh login,
+     * setup, or biometric resume). [SyncManager] coalesces concurrent runs, so re-emissions
+     * are harmless.
+     */
+    private fun triggerSyncOnAuthentication() {
+        viewModelScope.launch {
+            sessionManager.state.collect { state ->
+                if (state is SessionState.Authenticated) {
+                    syncManager.syncNow()
+                    syncScheduler.ensurePeriodicSync()
+                }
+            }
+        }
     }
 
     private fun bootstrap() {
