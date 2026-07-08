@@ -127,7 +127,9 @@ class TransactionFormViewModel @Inject constructor(
     fun appendOperator(op: Char) = _uiState.update {
         val prev = it.expr
         val next = when {
-            prev.isEmpty() -> if (op == '-') "-" else prev
+            // No leading operator: amounts are positive, so a unary '-' can never form a valid
+            // expression (the evaluator rejects it) — accepting it would only create dead input.
+            prev.isEmpty() -> prev
             prev.last() in "+-*/" -> prev.dropLast(1) + op
             else -> prev + op
         }

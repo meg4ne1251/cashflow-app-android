@@ -76,6 +76,20 @@ class SyncMappersTest {
         assertEquals(42L, parseEpochMillis(null, fallback = 42L))
     }
 
+    @Test
+    fun `transaction date is normalized to a fixed second-precision form`() {
+        // The backend drops :00 seconds (LocalDateTime.toString); the form always writes seconds.
+        // Normalizing on pull keeps the two representations comparable for dashboard date ranges.
+        fun dateOf(raw: String) = TransactionDto(
+            id = "t1", type = "expense", amount = 1, currency = "JPY", date = raw, version = 1,
+            created_at = "2026-05-01T00:00:00Z", updated_at = "2026-05-01T00:00:00Z", deleted_at = null,
+        ).toEntity(now = 0L).date
+
+        assertEquals("2026-06-03T14:30:00", dateOf("2026-06-03T14:30"))      // seconds re-added
+        assertEquals("2026-06-03T14:30:47", dateOf("2026-06-03T14:30:47.123")) // fraction dropped
+        assertEquals("2026-05-01T00:00:00", dateOf("2026-05-01"))            // date-only → midnight
+    }
+
     // ----- toSyncChange (Phase 3 push) -----
 
     @Test

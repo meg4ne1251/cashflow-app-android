@@ -67,7 +67,7 @@ class TransactionRepository @Inject constructor(
     fun pagedTransactions(filter: TransactionFilter): Flow<PagingData<TransactionListItem>> =
         Pager(PagingConfig(pageSize = PAGE_SIZE, enablePlaceholders = false)) {
             transactionDao.pagingSource(
-                keyword = filter.keyword?.takeIf { it.isNotBlank() },
+                keyword = filter.keyword?.takeIf { it.isNotBlank() }?.let(::escapeLikeArg),
                 type = filter.type,
                 categoryId = filter.categoryId,
                 accountId = filter.accountId,
@@ -145,8 +145,9 @@ class TransactionRepository @Inject constructor(
     /**
      * Hides a transaction locally for the undo window without contacting the server. A never-synced
      * local create (`version == 0`) is hard-deleted outright (the server never saw it); a synced row
-     * is soft-deleted + flagged pending. Returns the pre-delete snapshot for [restore]; the push is
-     * deferred to [commitDelete] so an immediate undo costs nothing.
+     * is soft-deleted and flagged [SyncStatus.PENDING_DELETE], which keeps it out of `dirty()` so a
+     * background/periodic sync cannot push the delete during the undo window. Returns the pre-delete
+     * snapshot for [restore]; the push is promoted to pending by [commitDelete] once undo closes.
      */
     suspend fun softDeleteLocal(id: String): TransactionEntity? {
         val snapshot = transactionDao.getById(id) ?: return null
@@ -158,7 +159,7 @@ class TransactionRepository @Inject constructor(
                     deletedAt = OffsetDateTime.now().toString(),
                     sync = snapshot.sync.copy(
                         isSynced = false,
-                        syncStatus = SyncStatus.PENDING,
+                        syncStatus = SyncStatus.PENDING_DELETE,
                         localUpdatedAt = System.currentTimeMillis(),
                     ),
                 )
@@ -172,12 +173,23 @@ class TransactionRepository @Inject constructor(
         transactionDao.upsert(snapshot)
     }
 
-    /** Commits a pending delete by flushing it to the server (no-op for already hard-deleted rows). */
+    /**
+     * Commits a deferred soft-delete: promotes it from `pending_delete` to a pushable `pending` and
+     * flushes. A no-op (no sync requested) when there is nothing to promote — e.g. a never-synced
+     * create that was hard-deleted, or a row already restored via undo.
+     */
     suspend fun commitDelete(id: String) {
-        if (transactionDao.getById(id) != null) syncScheduler.requestSync()
+        if (transactionDao.markDeleteCommitted(id) > 0) syncScheduler.requestSync()
     }
 
     private companion object {
         const val PAGE_SIZE = 50
     }
 }
+
+/**
+ * Escapes LIKE wildcards so a literal `%` or `_` in the search term isn't treated as a pattern.
+ * Paired with `ESCAPE '\'` in [com.kakeibo.android.core.database.dao.TransactionDao.pagingSource].
+ */
+private fun escapeLikeArg(raw: String): String =
+    raw.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")

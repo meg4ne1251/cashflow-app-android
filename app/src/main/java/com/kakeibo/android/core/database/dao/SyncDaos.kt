@@ -73,9 +73,48 @@ interface TransactionDao {
     /** Physically removes a row (used for an undo of a never-synced local create). */
     @Query("DELETE FROM transactions WHERE id = :id") suspend fun hardDelete(id: String)
 
-    /** Rows with local changes awaiting push (created, edited, or soft-deleted offline). */
-    @Query("SELECT * FROM transactions WHERE sync_status != 'clean'")
+    /**
+     * Rows ready to push (created, edited, or a *committed* soft-delete). A `pending_delete` row is
+     * an undo-window soft-delete whose push is deferred until [markDeleteCommitted] or
+     * [commitStaleDeletes] promotes it to `pending`, so it is intentionally excluded here.
+     */
+    @Query("SELECT * FROM transactions WHERE sync_status IN ('pending', 'conflict')")
     suspend fun dirty(): List<TransactionEntity>
+
+    /**
+     * Marks a just-pushed row clean and adopts the server [version] — but only if the row has not
+     * been locally re-touched since the push snapshot ([expectedLocalUpdatedAt]). A concurrent edit
+     * or a hard-delete during the network round-trip changes (or removes) the row, in which case this
+     * is a no-op and the fresh local change survives to be pushed on the next run. Returns the number
+     * of rows updated (0 when the row changed underneath the push).
+     */
+    @Query(
+        "UPDATE transactions SET version = :version, is_synced = 1, sync_status = 'clean' " +
+            "WHERE id = :id AND local_updated_at = :expectedLocalUpdatedAt"
+    )
+    suspend fun markSynced(id: String, version: Int, expectedLocalUpdatedAt: Long): Int
+
+    /** Flags a pushed row as conflicted, under the same stale-snapshot guard as [markSynced]. */
+    @Query(
+        "UPDATE transactions SET sync_status = 'conflict' " +
+            "WHERE id = :id AND local_updated_at = :expectedLocalUpdatedAt AND sync_status != 'clean'"
+    )
+    suspend fun markConflicted(id: String, expectedLocalUpdatedAt: Long): Int
+
+    /** Promotes a single undo-window soft-delete to a pushable `pending`. Returns rows updated. */
+    @Query("UPDATE transactions SET sync_status = 'pending' WHERE id = :id AND sync_status = 'pending_delete'")
+    suspend fun markDeleteCommitted(id: String): Int
+
+    /**
+     * Crash-safety net: promotes any undo-window soft-delete older than [before] (`local_updated_at`)
+     * to `pending`, so a process death during the undo window cannot strand a locally-hidden row that
+     * never reaches the server. The grace window keeps a still-live undo from being committed early.
+     */
+    @Query(
+        "UPDATE transactions SET sync_status = 'pending' " +
+            "WHERE sync_status = 'pending_delete' AND local_updated_at < :before"
+    )
+    suspend fun commitStaleDeletes(before: Long): Int
 
     /**
      * Paged list for the UI, joined with category/account for display. Filters are skipped when
@@ -93,7 +132,9 @@ interface TransactionDao {
         LEFT JOIN categories c ON t.category_id = c.id
         LEFT JOIN accounts a ON t.account_id = a.id
         WHERE t.deleted_at IS NULL
-          AND (:keyword IS NULL OR t.name LIKE '%' || :keyword || '%' OR t.memo LIKE '%' || :keyword || '%')
+          AND (:keyword IS NULL
+               OR t.name LIKE '%' || :keyword || '%' ESCAPE '\'
+               OR t.memo LIKE '%' || :keyword || '%' ESCAPE '\')
           AND (:type IS NULL OR t.type = :type)
           AND (:categoryId IS NULL OR t.category_id = :categoryId)
           AND (:accountId IS NULL OR t.account_id = :accountId)

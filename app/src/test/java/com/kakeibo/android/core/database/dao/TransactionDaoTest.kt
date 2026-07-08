@@ -108,6 +108,63 @@ class TransactionDaoTest {
         assertTrue(sparkRows.none { it.amount == 9999L })
     }
 
+    @Test
+    fun `markSynced applies only when local_updated_at matches the snapshot`() = runTest {
+        // t4 is the pending row from setup; its localUpdatedAt defaults to 0.
+        assertEquals(0, dao.markSynced("t4", version = 9, expectedLocalUpdatedAt = 999L)) // stale → no-op
+        assertEquals(SyncStatus.PENDING, dao.getById("t4")!!.sync.syncStatus)
+
+        assertEquals(1, dao.markSynced("t4", version = 9, expectedLocalUpdatedAt = 0L)) // matches → applied
+        val row = dao.getById("t4")!!
+        assertEquals(9, row.version)
+        assertEquals(SyncStatus.CLEAN, row.sync.syncStatus)
+        assertTrue(row.sync.isSynced)
+    }
+
+    @Test
+    fun `dirty excludes undo-window soft-deletes until committed`() = runTest {
+        val t4 = dao.getById("t4")!!
+        dao.upsert(
+            t4.copy(
+                deletedAt = "2026-06-05T00:00:00",
+                sync = t4.sync.copy(syncStatus = SyncStatus.PENDING_DELETE),
+            )
+        )
+        assertTrue(dao.dirty().none { it.id == "t4" }) // deferred: not yet pushable
+
+        assertEquals(1, dao.markDeleteCommitted("t4"))
+        assertEquals(listOf("t4"), dao.dirty().map { it.id }) // now pushable
+    }
+
+    @Test
+    fun `commitStaleDeletes promotes only soft-deletes older than the cutoff`() = runTest {
+        dao.upsert(
+            tx("d-old", "expense", 1, "2026-06-01T00:00:00", "c1", null, SyncStatus.PENDING_DELETE)
+                .copy(deletedAt = "2026-06-01T00:00:00", sync = SyncMeta(syncStatus = SyncStatus.PENDING_DELETE, localUpdatedAt = 100L))
+        )
+        dao.upsert(
+            tx("d-new", "expense", 1, "2026-06-01T00:00:00", "c1", null, SyncStatus.PENDING_DELETE)
+                .copy(deletedAt = "2026-06-01T00:00:00", sync = SyncMeta(syncStatus = SyncStatus.PENDING_DELETE, localUpdatedAt = 1000L))
+        )
+
+        assertEquals(1, dao.commitStaleDeletes(before = 500L))
+        assertEquals(SyncStatus.PENDING, dao.getById("d-old")!!.sync.syncStatus)
+        assertEquals(SyncStatus.PENDING_DELETE, dao.getById("d-new")!!.sync.syncStatus)
+    }
+
+    @Test
+    fun `keyword like treats percent as a literal via escape`() = runTest {
+        dao.upsert(
+            listOf(
+                tx("p1", "expense", 1, "2026-06-10T00:00:00", "c1", null, SyncStatus.CLEAN).copy(name = "50%OFF"),
+                tx("p2", "expense", 1, "2026-06-10T00:00:00", "c1", null, SyncStatus.CLEAN).copy(name = "5000 yen"),
+            )
+        )
+        // Raw "50%" would wildcard-match both; the escaped form matches only the literal "50%".
+        val rows = load(dao.pagingSource("50\\%", null, null, null, null, null, 0))
+        assertEquals(listOf("p1"), rows.map { it.id })
+    }
+
     // ----- helpers -----
 
     private fun filterSort(sort: TransactionSort) =

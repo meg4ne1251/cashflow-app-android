@@ -12,7 +12,6 @@ import com.kakeibo.android.core.database.dao.TagDao
 import com.kakeibo.android.core.database.dao.TemplateDao
 import com.kakeibo.android.core.database.dao.TransactionDao
 import com.kakeibo.android.core.database.dao.TransferDao
-import com.kakeibo.android.core.database.entity.SyncStatus
 import com.kakeibo.android.core.network.api.SyncApiService
 import com.kakeibo.android.core.network.dto.SyncData
 import com.kakeibo.android.core.network.dto.SyncPushRequest
@@ -75,6 +74,9 @@ class SyncEngine @Inject constructor(
      */
     suspend fun push(): SyncOutcome {
         return try {
+            // Promote any soft-delete whose undo window has long since closed (e.g. the app was
+            // killed before commitDelete ran) so it is not stranded as a locally-hidden, never-pushed row.
+            transactionDao.commitStaleDeletes(System.currentTimeMillis() - DELETE_COMMIT_GRACE_MS)
             val dirty = transactionDao.dirty()
             if (dirty.isEmpty()) return SyncOutcome.Success(0)
             var pushed = 0
@@ -84,23 +86,17 @@ class SyncEngine @Inject constructor(
                 db.withTransaction {
                     response.results.forEach { result ->
                         val entity = byId[result.id] ?: return@forEach
+                        // Reconcile against the pre-push snapshot's local_updated_at: if the row was
+                        // edited or hard-deleted while the request was in flight, the guarded update is
+                        // a no-op and the fresh local change is preserved (re-pushed next run) instead
+                        // of being silently overwritten with the stale, just-acknowledged data.
+                        val stamp = entity.sync.localUpdatedAt
                         when (result.status) {
                             "accepted" -> {
                                 val newVersion = result.server_version ?: (entity.version + 1)
-                                transactionDao.upsert(
-                                    entity.copy(
-                                        version = newVersion,
-                                        sync = entity.sync.copy(
-                                            isSynced = true,
-                                            syncStatus = SyncStatus.CLEAN,
-                                        ),
-                                    )
-                                )
-                                pushed++
+                                if (transactionDao.markSynced(entity.id, newVersion, stamp) > 0) pushed++
                             }
-                            "conflict" -> transactionDao.upsert(
-                                entity.copy(sync = entity.sync.copy(syncStatus = SyncStatus.CONFLICT))
-                            )
+                            "conflict" -> transactionDao.markConflicted(entity.id, stamp)
                             else -> Timber.w(
                                 "Sync push rejected: %s %s status=%s",
                                 result.entity_type, result.id, result.status,
@@ -235,5 +231,11 @@ class SyncEngine @Inject constructor(
 
         /** Server-side per-request change limit (SyncService.MAX_BATCH_SIZE). */
         private const val MAX_BATCH = 100
+
+        /**
+         * Grace period after a soft-delete before a background sync force-commits it. Must comfortably
+         * exceed the undo snackbar duration so a live undo is never committed out from under the user.
+         */
+        private const val DELETE_COMMIT_GRACE_MS = 30_000L
     }
 }

@@ -26,6 +26,14 @@ object SyncStatus {
     const val CLEAN = "clean"
     const val PENDING = "pending"
     const val CONFLICT = "conflict"
+
+    /**
+     * An undo-window soft-delete whose push is deliberately deferred: the row is hidden from the UI
+     * immediately but is *not* pushed (excluded from `dirty()`) until the undo window closes and it
+     * is promoted to [PENDING]. This keeps a background/periodic sync from pushing a delete the user
+     * may still undo.
+     */
+    const val PENDING_DELETE = "pending_delete"
 }
 
 @Entity(tableName = "accounts")
