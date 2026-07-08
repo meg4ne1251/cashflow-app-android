@@ -8,6 +8,8 @@ import com.kakeibo.android.core.database.dao.TransactionDao
 import com.kakeibo.android.core.database.dao.TransactionListItem
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import javax.inject.Inject
@@ -76,8 +78,15 @@ class DashboardRepository @Inject constructor(
     private val templateDao: TemplateDao,
 ) {
 
-    fun observeDashboard(): Flow<DashboardUiData> {
-        val today = LocalDate.now()
+    fun observeDashboard(): Flow<DashboardUiData> = flow {
+        // Re-evaluate "today" on every (re)subscription rather than once at ViewModel construction:
+        // stateIn(WhileSubscribed) re-collects this flow when the screen is re-entered, so the month
+        // and sparkline windows can't freeze on a stale month if the app is left open across a
+        // midnight or month-end boundary.
+        emitAll(dashboardFor(LocalDate.now()))
+    }
+
+    private fun dashboardFor(today: LocalDate): Flow<DashboardUiData> {
         val monthStart = today.withDayOfMonth(1)
         val monthEnd = monthStart.plusMonths(1)
         val prevStart = monthStart.minusMonths(1)

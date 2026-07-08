@@ -183,7 +183,16 @@ class SyncEngine @Inject constructor(
             accountDao.upsert(data.accounts.map { it.toEntity(now) })
             categoryDao.upsert(data.categories.map { it.toEntity(now) })
             tagDao.upsert(data.tags.map { it.toEntity(now) })
-            transactionDao.upsert(data.transactions.map { it.toEntity(now) })
+            // Never overwrite a transaction that still holds an un-pushed local change (`pending`) or
+            // a soft-delete inside its undo window (`pending_delete`). Pull runs right after push, so
+            // a row edited during the push round-trip — deliberately preserved by markSynced's stale
+            // guard — would otherwise be clobbered here and its edit silently lost. `conflict` rows are
+            // intentionally *not* protected: server-wins resolution (req 2.6.2) expects pull to replace
+            // them. Reading the id set inside this transaction keeps it consistent with the upsert.
+            val protectedIds = transactionDao.locallyDirtyIds().toHashSet()
+            transactionDao.upsert(
+                data.transactions.filter { it.id !in protectedIds }.map { it.toEntity(now) }
+            )
             transferDao.upsert(data.transfers.map { it.toEntity(now) })
             templateDao.upsert(data.templates.map { it.toEntity(now) })
             recurringDao.upsert(data.recurring_transactions.map { it.toEntity(now) })

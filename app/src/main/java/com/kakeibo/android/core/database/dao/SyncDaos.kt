@@ -82,6 +82,15 @@ interface TransactionDao {
     suspend fun dirty(): List<TransactionEntity>
 
     /**
+     * Ids of rows carrying an un-pushed local change: an edit/create awaiting push (`pending`) or a
+     * soft-delete still inside its undo window (`pending_delete`). The sync pull uses this to avoid
+     * overwriting them with the server copy. `conflict` is deliberately excluded — those are resolved
+     * server-wins by the very next pull.
+     */
+    @Query("SELECT id FROM transactions WHERE sync_status IN ('pending', 'pending_delete')")
+    suspend fun locallyDirtyIds(): List<String>
+
+    /**
      * Marks a just-pushed row clean and adopts the server [version] — but only if the row has not
      * been locally re-touched since the push snapshot ([expectedLocalUpdatedAt]). A concurrent edit
      * or a hard-delete during the network round-trip changes (or removes) the row, in which case this
